@@ -3,6 +3,7 @@
 namespace KnpU\CodeBattle\Controller\Api;
 
 use KnpU\CodeBattle\Api\ApiProblem;
+use KnpU\CodeBattle\Api\ApiProblemException;
 use KnpU\CodeBattle\Controller\BaseController;
 use KnpU\CodeBattle\Model\Programmer;
 use Silex\Application;
@@ -10,6 +11,7 @@ use Silex\ControllerCollection;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ProgrammerController extends BaseController
 {
@@ -35,7 +37,7 @@ class ProgrammerController extends BaseController
         $this->handleRequest($request, $programmer);
 
         if ($errors = $this->validate($programmer)) {
-            return $this->handleValidationResponse($errors);
+            $this->throwApiProblemValidationException($errors);
         }
 
         $this->save($programmer);
@@ -63,7 +65,7 @@ class ProgrammerController extends BaseController
         $this->handleRequest($request, $programmer);
 
         if ($errors = $this->validate($programmer)) {
-            return $this->handleValidationResponse($errors);
+            $this->throwApiProblemValidationException($errors);
         }
 
         $this->save($programmer);
@@ -81,7 +83,7 @@ class ProgrammerController extends BaseController
             ->findOneByNickname($nickname);
 
         if (!$programmer) {
-            $this->throw404('No programmers :(');
+            $this->throw404("The programmer $nickname does not exist!");
         }
 
         $data = $this->serializeProgrammer($programmer);
@@ -132,7 +134,12 @@ class ProgrammerController extends BaseController
         $isNew = !$programmer->id;
 
         if ($data === null) {
-            throw new \Exception(sprintf('Invalid JSON: '.$request->getContent()));
+            $problem = new ApiProblem(
+                400,
+                ApiProblem::TYPE_INVALID_REQUEST_BODY_FORMAT
+            );
+
+            throw new ApiProblemException($problem);
         }
 
         // determine which properties should be changeable on this request
@@ -155,7 +162,7 @@ class ProgrammerController extends BaseController
         $programmer->userId = $this->findUserByUsername('weaverryan')->id;
     }
 
-    private function handleValidationResponse(array $errors)
+    private function throwApiProblemValidationException(array $errors)
     {
         $apiProblem = new ApiProblem(
             400,
@@ -164,13 +171,6 @@ class ProgrammerController extends BaseController
 
         $apiProblem->set('errors', $errors);
 
-        $response = new JsonResponse(
-            $apiProblem->toArray(),
-            $apiProblem->getStatusCode()
-        );
-        $response->headers->set('Content-Type', 'application/problem+json');
-
-        return $response;
+        throw new ApiProblemException($apiProblem);
     }
-
 }

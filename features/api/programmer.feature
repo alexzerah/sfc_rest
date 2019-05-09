@@ -104,3 +104,25 @@ Feature: Programmer
     And the "errors.nickname" property should exist
     But the "errors.avatarNumber" property should not exist
     And the "Content-Type" header should be "application/problem+json"
+
+
+  Scenario: Error response on invalid JSON
+    Given I have the payload:
+    """
+    {
+      "avatarNumber" : "2
+      "tagLine": "I'm from a test!"
+    }
+    """
+    When I request "POST /api/programmers"
+    Then the response status code should be 400
+    And the "Content-Type" header should be "application/problem+json"
+    And the "type" property should contain "/api/docs/errors#invalid_body_format"
+
+  Scenario: Proper 404 exception on no programmer
+    When I request "GET /api/programmers/fake"
+    Then the response status code should be 404
+    And the "Content-Type" header should be "application/problem+json"
+    And the "type" property should contain "about:blank"
+    And the "title" property should equal "Not Found"
+    And the "detail" property should equal "The programmer fake does not exist!"
