@@ -6,12 +6,9 @@ use KnpU\CodeBattle\Api\ApiProblem;
 use KnpU\CodeBattle\Api\ApiProblemException;
 use KnpU\CodeBattle\Controller\BaseController;
 use KnpU\CodeBattle\Model\Programmer;
-use Silex\Application;
 use Silex\ControllerCollection;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ProgrammerController extends BaseController
 {
@@ -32,6 +29,8 @@ class ProgrammerController extends BaseController
 
     public function newAction(Request $request)
     {
+        $this->enforceUserSecurity();
+
         $programmer = new Programmer();
 
         $this->handleRequest($request, $programmer);
@@ -42,14 +41,13 @@ class ProgrammerController extends BaseController
 
         $this->save($programmer);
 
-        $url = $this->generateUrl('api_programmers_show', [
-            'nickname' => $programmer->nickname,
-        ]);
+        $response = $this->createApiResponse($programmer, 201);
 
-        $data = $this->serializeProgrammer($programmer);
-
-        $response = new JsonResponse($data, 201);
-        $response->headers->set('Location', $url);
+        $programmerUrl = $this->generateUrl(
+            'api_programmers_show',
+            ['nickname' => $programmer->nickname]
+        );
+        $response->headers->set('Location', $programmerUrl);
 
         return $response;
     }
@@ -57,6 +55,8 @@ class ProgrammerController extends BaseController
     public function updateAction($nickname, Request $request)
     {
         $programmer = $this->getProgrammerRepository()->findOneByNickname($nickname);
+
+        $this->enforceProgrammerOwnershipSecurity($programmer);
 
         if (!$programmer) {
             $this->throw404();
@@ -70,9 +70,8 @@ class ProgrammerController extends BaseController
 
         $this->save($programmer);
 
-        $data = $this->serializeProgrammer($programmer);
-
-        $response = new JsonResponse($data, 200);
+        $json = $this->serialize($programmer);
+        $response = new Response($json, 200);
 
         return $response;
     }
@@ -86,24 +85,19 @@ class ProgrammerController extends BaseController
             $this->throw404("The programmer $nickname does not exist!");
         }
 
-        $data = $this->serializeProgrammer($programmer);
-
-        $response = new JsonResponse($data, 200);
+        $json = $this->serialize($programmer);
+        $response = new Response($json, 200);
 
         return $response;
     }
 
     public function listAction()
     {
-        $programmers = $this->getProgrammerRepository()
-            ->findAll();
+        $programmers = $this->getProgrammerRepository()->findAll();
+        $data = ['programmers' => $programmers];
+        $json = $this->serialize($data);
 
-        $data = ['programmers' => []];
-        foreach ($programmers as $programmer){
-            $data['programmers'][] = $this->serializeProgrammer($programmer);
-        }
-
-        $response = new JsonResponse($data, 200);
+        $response = new Response($json, 200);
 
         return $response;
     }
@@ -111,21 +105,14 @@ class ProgrammerController extends BaseController
     public function deleteAction($nickname)
     {
         $programmer = $this->getProgrammerRepository()->findOneByNickname($nickname);
+
+        $this->enforceProgrammerOwnershipSecurity($programmer);
+
         if ($programmer) {
             $this->delete($programmer);
         }
 
         return new Response(null, 204);
-    }
-
-    private function serializeProgrammer($programmer)
-    {
-        return [
-            'nickname' => $programmer->nickname,
-            'avatarNumber' => $programmer->avatarNumber,
-            'powerLevel' => $programmer->powerLevel,
-            'tagLine' => $programmer->tagLine,
-        ];
     }
 
     private function handleRequest(Request $request, Programmer $programmer)
@@ -159,7 +146,7 @@ class ProgrammerController extends BaseController
             $programmer->$property = $val;
         }
 
-        $programmer->userId = $this->findUserByUsername('weaverryan')->id;
+        $programmer->userId = $this->getLoggedInUser()->id;
     }
 
     private function throwApiProblemValidationException(array $errors)

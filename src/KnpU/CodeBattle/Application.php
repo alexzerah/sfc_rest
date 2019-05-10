@@ -3,6 +3,8 @@
 namespace KnpU\CodeBattle;
 
 use Doctrine\Common\Annotations\AnnotationReader;
+use JMS\Serializer\Naming\IdenticalPropertyNamingStrategy;
+use JMS\Serializer\SerializerBuilder;
 use KnpU\CodeBattle\Api\ApiProblem;
 use KnpU\CodeBattle\Api\ApiProblemException;
 use KnpU\CodeBattle\Battle\PowerManager;
@@ -210,6 +212,14 @@ class Application extends SilexApplication
         $this['api.validator'] = $this->share(function() use ($app) {
             return new ApiValidator($app['validator']);
         });
+
+        $this['serializer'] = $this->share(function() use ($app) {
+            return SerializerBuilder::create()
+                ->setCacheDir($app['root_dir'].'/cache/serializer')
+                ->setDebug($app['debug'])
+                ->setPropertyNamingStrategy(new IdenticalPropertyNamingStrategy())
+                ->build();
+        });
     }
 
     private function configureSecurity()
@@ -318,11 +328,11 @@ class Application extends SilexApplication
             if ($data['type'] != 'about:blank') {
                 $data['type'] = 'http://localhost:8000/api/docs/errors#'.$data['type'];
             }
+
             $response = new JsonResponse(
                 $data,
-                $statusCode
+                $apiProblem->getStatusCode()
             );
-
             $response->headers->set('Content-Type', 'application/problem+json');
 
             return $response;

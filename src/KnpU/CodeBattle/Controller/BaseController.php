@@ -2,6 +2,7 @@
 
 namespace KnpU\CodeBattle\Controller;
 
+use JMS\Serializer\SerializationContext;
 use KnpU\CodeBattle\Model\Programmer;
 use KnpU\CodeBattle\Model\User;
 use KnpU\CodeBattle\Repository\UserRepository;
@@ -10,12 +11,14 @@ use Silex\Application as SilexApplication;
 use Silex\ControllerCollection;
 use Silex\ControllerProviderInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\HttpFoundation\Request;
 use KnpU\CodeBattle\Repository\ProgrammerRepository;
 use KnpU\CodeBattle\Repository\ProjectRepository;
 use KnpU\CodeBattle\Security\Token\ApiTokenRepository;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 /**
  * Base controller class to hide Silex-related implementation details
@@ -41,6 +44,23 @@ abstract class BaseController implements ControllerProviderInterface
         $this->addRoutes($controllers);
 
         return $controllers;
+    }
+
+    protected function serialize($data, $format = 'json')
+    {
+        $context = new SerializationContext();
+        $context->setSerializeNull(true);
+
+        return $this->container['serializer']->serialize($data, $format, $context);
+    }
+
+    protected function createApiResponse($data, $statusCode = 200)
+    {
+        $json = $this->serialize($data);
+
+        return new Response($json, $statusCode, array(
+            'Content-Type' => 'application/json'
+        ));
     }
 
     /**
@@ -228,4 +248,19 @@ abstract class BaseController implements ControllerProviderInterface
         return $this->container['repository.api_token'];
     }
 
+    protected function enforceProgrammerOwnershipSecurity(Programmer $programmer)
+    {
+        $this->enforceUserSecurity();
+
+        if ($this->getLoggedInUser()->id != $programmer->userId) {
+            throw new AccessDeniedException();
+        }
+    }
+
+    protected function enforceUserSecurity()
+    {
+        if (!$this->isUserLoggedIn()) {
+            throw new AccessDeniedException();
+        }
+    }
 }

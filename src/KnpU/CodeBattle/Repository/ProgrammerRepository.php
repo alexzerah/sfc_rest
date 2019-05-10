@@ -13,12 +13,12 @@ class ProgrammerRepository extends BaseRepository
      */
     public function findOneByNickname($nickname)
     {
-        return $this->findOneBy(array('nickname' => $nickname));
+        return $this->findOneBy(['nickname' => $nickname]);
     }
 
     public function findAllForUser(User $user)
     {
-        return $this->findAllBy(array('userId' => $user->id));
+        return $this->findAllBy(['userId' => $user->id]);
     }
 
     protected function getClassName()
