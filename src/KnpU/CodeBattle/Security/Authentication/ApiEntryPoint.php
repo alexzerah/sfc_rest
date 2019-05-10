@@ -2,6 +2,8 @@
 
 namespace KnpU\CodeBattle\Security\Authentication;
 
+use KnpU\CodeBattle\Api\ApiProblem;
+use KnpU\CodeBattle\Api\ApiProblemResponseFactory;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,10 +20,12 @@ use Symfony\Component\Translation\Translator;
 class ApiEntryPoint implements AuthenticationEntryPointInterface
 {
     private $translator;
+    private $responseFactory;
 
-    public function __construct(Translator $translator)
+    public function __construct(Translator $translator, ApiProblemResponseFactory $responseFactory)
     {
         $this->translator = $translator;
+        $this->responseFactory = $responseFactory;
     }
 
     /**
@@ -36,9 +40,10 @@ class ApiEntryPoint implements AuthenticationEntryPointInterface
     {
         $message = $this->getMessage($authException);
 
-        $response = new JsonResponse(['detail' => $message], 401);
+        $problem = new ApiProblem(401, ApiProblem::TYPE_AUTHENTICATION_ERROR);
+        $problem->set('detail', $message);
 
-        return $response;
+        return $this->responseFactory->createResponse($problem);
     }
 
     /**

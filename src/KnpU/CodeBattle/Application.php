@@ -3,10 +3,12 @@
 namespace KnpU\CodeBattle;
 
 use Doctrine\Common\Annotations\AnnotationReader;
+use Exception;
 use JMS\Serializer\Naming\IdenticalPropertyNamingStrategy;
 use JMS\Serializer\SerializerBuilder;
 use KnpU\CodeBattle\Api\ApiProblem;
 use KnpU\CodeBattle\Api\ApiProblemException;
+use KnpU\CodeBattle\Api\ApiProblemResponseFactory;
 use KnpU\CodeBattle\Battle\PowerManager;
 use KnpU\CodeBattle\Repository\BattleRepository;
 use KnpU\CodeBattle\Repository\ProjectRepository;
@@ -220,15 +222,19 @@ class Application extends SilexApplication
                 ->setPropertyNamingStrategy(new IdenticalPropertyNamingStrategy())
                 ->build();
         });
+
+        $this['api.response_factory'] = $this->share(function() {
+            return new ApiProblemResponseFactory();
+        });
     }
 
     private function configureSecurity()
     {
         $app = $this;
 
-        $this->register(new SecurityServiceProvider(), array(
-            'security.firewalls' => array(
-                'api' => array(
+        $this->register(new SecurityServiceProvider(), [
+            'security.firewalls' => [
+                'api' => [
                     'pattern' => '^/api',
                     'users' => $this->share(function () use ($app) {
                         return $app['repository.user'];
@@ -236,8 +242,9 @@ class Application extends SilexApplication
                     'stateless' => true,
                     'anonymous' => true,
                     'api_token' => true,
-                ),
-                'main' => array(
+                    'http'      => true,
+                ],
+                'main' => [
                     'pattern' => '^/',
                     'form' => true,
                     'users' => $this->share(function () use ($app) {
@@ -245,9 +252,9 @@ class Application extends SilexApplication
                     }),
                     'anonymous' => true,
                     'logout' => true,
-                ),
-            )
-        ));
+                ],
+            ]
+        ]);
 
         // require login for application management
         $this['security.access_rules'] = array(
@@ -275,7 +282,7 @@ class Application extends SilexApplication
 
             // the class that decides what should happen if no authentication credentials are passed
             $this['security.entry_point.'.$name.'.api_token'] = $app->share(function() use ($app) {
-                return new ApiEntryPoint($app['translator']);
+                return new ApiEntryPoint($app['translator'], $app['api.response_factory']);
             });
 
             return array(
@@ -302,7 +309,7 @@ class Application extends SilexApplication
     {
         $app = $this;
 
-        $this->error(function(\Exception $e, $statusCode) use ($app) {
+        $this->error(function(Exception $e, $statusCode) use ($app) {
             // only act on /api URLs
             if (strpos($app['request']->getPathInfo(), '/api') !== 0) {
                 return;
@@ -335,7 +342,10 @@ class Application extends SilexApplication
             );
             $response->headers->set('Content-Type', 'application/problem+json');
 
-            return $response;
+            /** @var  ApiProblemResponseFactory $factory */
+            $factory = $app['api.response_factory'];
+
+            return $factory->createResponse($apiProblem);
         });
     }
 }

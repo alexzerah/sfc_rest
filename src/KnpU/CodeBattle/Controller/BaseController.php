@@ -3,13 +3,18 @@
 namespace KnpU\CodeBattle\Controller;
 
 use JMS\Serializer\SerializationContext;
+use KnpU\CodeBattle\Api\ApiProblem;
+use KnpU\CodeBattle\Api\ApiProblemException;
+use KnpU\CodeBattle\Battle\BattleManager;
 use KnpU\CodeBattle\Model\Programmer;
 use KnpU\CodeBattle\Model\User;
+use KnpU\CodeBattle\Repository\BattleRepository;
 use KnpU\CodeBattle\Repository\UserRepository;
 use KnpU\CodeBattle\Application;
 use Silex\Application as SilexApplication;
 use Silex\ControllerCollection;
 use Silex\ControllerProviderInterface;
+use Symfony\Component\HttpFoundation\ParameterBag;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -26,7 +31,7 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 abstract class BaseController implements ControllerProviderInterface
 {
     /**
-     * @var \KnpU\CodeBattle\Application
+     * @var Application
      */
     protected $container;
 
@@ -225,7 +230,7 @@ abstract class BaseController implements ControllerProviderInterface
     }
 
     /**
-     * @return \KnpU\CodeBattle\Repository\BattleRepository
+     * @return BattleRepository
      */
     protected function getBattleRepository()
     {
@@ -233,7 +238,7 @@ abstract class BaseController implements ControllerProviderInterface
     }
 
     /**
-     * @return \KnpU\CodeBattle\Battle\BattleManager
+     * @return BattleManager
      */
     protected function getBattleManager()
     {
@@ -262,5 +267,35 @@ abstract class BaseController implements ControllerProviderInterface
         if (!$this->isUserLoggedIn()) {
             throw new AccessDeniedException();
         }
+    }
+
+    protected function decodeRequestBodyIntoParameters(Request $request)
+    {
+        if (!$request->getContent()) {
+            $data = [];
+        } else {
+            $data = json_decode($request->getContent(), true);
+
+            if ($data === null) {
+                $problem = new ApiProblem(
+                    400,
+                    ApiProblem::TYPE_INVALID_REQUEST_BODY_FORMAT
+                );
+                throw new ApiProblemException($problem);
+            }
+        }
+
+        return new ParameterBag($data);
+    }
+
+    protected function throwApiProblemValidationException(array $errors)
+    {
+        $apiProblem = new ApiProblem(
+            400,
+            ApiProblem::TYPE_VALIDATION_ERROR
+        );
+        $apiProblem->set('errors', $errors);
+
+        throw new ApiProblemException($apiProblem);
     }
 }
